@@ -1,0 +1,66 @@
+use super::*;
+
+grammar;
+
+pub Grammar: Grammar = {
+    <rules:Rule+> => Grammar(rules),
+}
+
+pub Rule: Rule = {
+    <lhs:Ident> "=" <rhs:Expr> ";" => {
+        Rule(lhs, rhs)
+    },
+}
+
+pub Expr: Arc<Expr> = {
+    <e0:ExprSeq> <rest:("|" ExprSeq)*> => {
+        if rest.len() > 0 {
+            let mut exprs = vec![e0];
+            for (_semi, e) in rest {
+                exprs.push(e);
+            }
+            Arc::new(Expr::Choice(exprs))
+        } else {
+            e0
+        }
+    }
+}
+
+pub ExprSeq: Arc<Expr> = {
+    <e0:ExprRep> <rest:("," ExprRep)*> => {
+        if rest.len() > 0 {
+            let mut exprs = vec![e0];
+            for (_semi, e) in rest {
+                exprs.push(e);
+            }
+            Arc::new(Expr::Sequence(exprs))
+        } else {
+            e0
+        }
+    }
+}
+
+pub ExprRep: Arc<Expr> = {
+    "{" <e:Expr> "}" => Arc::new(Expr::Repeat(e)),
+    "[" <e:Expr> "]" => Arc::new(Expr::Optional(e)),
+    "(" <e:Expr> ")" => e,
+    <e:ExprBase> => e,
+}
+
+pub ExprBase : Arc<Expr> = {
+    <id:Ident> => Arc::new(Expr::Nonterminal(id)),
+    <lit:r#""[^"\\]*""#> => Arc::new(Expr::Terminal(lit[1..lit.len()-1].to_string())),
+}
+
+Ident: Ident = {
+    <ll:@L> <id:r"[_A-Za-z][_A-Za-z0-9]*"> <rr:@R> => {
+        id.to_string()
+    },
+}
+
+match {
+    r"(\*[^*]*\*)" => {},
+    r" " => {},
+    r"\n" => {},
+    _,
+}

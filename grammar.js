@@ -17,26 +17,14 @@
 
 'use strict';
 
-/**
-  * Creates a rule to match one or more of the rules separated by the separator
-  *
-  * @param {string} sep - The separator to use.
-  * @param {Rule} rule
-  *
-  * @return {SeqRule}
-  *
-  */
-function sep1(sep, rule) {
-  return seq(rule, repeat(seq(sep, rule)));
-}
 
 module.exports = grammar({
   name: 'firrtl',
 
   externals: $ => [
-    $._newline,
-    $._indent,
-    $._dedent
+    $.newline,
+    $.indent,
+    $.dedent,
   ],
 
   extras: $ => [
@@ -56,356 +44,83 @@ module.exports = grammar({
   word: $ => $.identifier,
 
   rules: {
-    source_file: $ => repeat($.circuit),
-
-    circuit: $ => seq(
-      'circuit', $.identifier, ':', optional($.info),
-      optional(seq($._indent, repeat($.module), $._dedent))
-    ),
-
-    module: $ => choice(
-      seq(
-        'module', $.identifier, ':', optional($.info),
-        optional(seq(
-          $._indent,
-          repeat($.port),
-          repeat($.statement),
-          $._dedent
-        ))
-      ),
-      seq(
-        'extmodule', $.identifier, ':', optional($.info),
-        optional(seq(
-          $._indent,
-          repeat($.port),
-          optional($.defname),
-          repeat($.parameter),
-          $._dedent
-        ))
-      )
-    ),
-
-    port: $ => seq(
-      $.dir, $.identifier, ':', optional($.qualifier), $.type, optional($.info), $._newline
-    ),
-
-    dir: _ => choice('input', 'output'),
-
-    qualifier: _ => choice('const'),
-
-    type: $ => choice(
-      seq(
-        choice('UInt', 'SInt', 'Analog'),
-        optional(seq('<', $.number, '>'))
-      ),
-      seq(
-        'Fixed',
-        optional(seq('<', $.number, '>')),
-        optional(seq('<', '<', $.number, '>', '>'))
-      ),
-      'Clock',
-      'AsyncReset',
-      'Reset',
-      seq('{', optional(sep1(',', $.field)), '}'), // Bundle  // no commas in ANTLR
-      seq($.type, '[', $.number, ']') // Vector
-    ),
-
-    field: $ => seq(optional('flip'), $.field_id, ':', $.type),
-
-    defname: $ => seq('defname', '=', $.identifier, $._newline),
-
-    parameter: $ => seq(
-      'parameter', $.identifier,
-      '=',
-      choice(
-        $.number,
-        $.string,
-        $.double,
-        $.raw_string
-      ),
-      $._newline
-    ),
-
-    _reset: $ => seq('reset', '=>', '(', $.expression, ',', $.expression, ')'),
-
-    reset: $ => choice(
-      $._reset,
-      seq('(', $._reset, ')')
-    ),
-
-    reset_block: $ => choice(
-      seq($._indent, $.reset, optional($.info), $._newline, $._dedent),
-      seq('(', $.reset, ')')
-    ),
-
-    statement: $ => choice(
-      $.wire,
-      $.cmem,
-      $.smem,
-      $.register,
-      $.memory,
-      $.rdwr,
-      $.inst,
-      $.node,
-      $.connection,
-      $.partial_connection,
-      $.is_invalid,
-      $.when,
-      $.stop,
-      $.printf,
-      $.verif,
-      $.skip,
-      $.attach
-    ),
-
-    wire: $ => seq('wire', $.identifier, ':', $.type, optional($.info)),
-
-    cmem: $ => seq('cmem', $.identifier, ':', $.type, optional($.info)),
-
-    smem: $ => seq('smem', $.identifier, ':', $.type, optional($.info)),
-
-    register: $ => seq(
-      'reg', $.identifier, ':', $.type, ',', $.expression,
-      optional(seq('with', ':', $.reset_block)), // no comma in ANTLR
-      optional($.info)
-    ),
-
-    memory: $ => seq(
-      'mem', $.identifier, ':', optional($.info),
-      $._indent, repeat($.memory_field), $._dedent
-    ),
-
-    rdwr: $ => seq(
-      $.mdir, 'mport', $.identifier,
-      '=',
-      $.identifier, '[', $.expression, ']', ',', $.expression,
-      optional($.info)
-    ),
-
-    inst: $ => seq('inst', $.identifier, 'of', $.identifier, optional($.info)),
-
-    node: $ => seq('node', $.identifier, '=', $.expression, optional($.info)),
-
-    connection: $ => seq($.expression, '<=', $.expression, optional($.info)),
-
-    partial_connection: $ => seq($.expression, '<-', $.expression, optional($.info)),
-
-    is_invalid: $ => seq($.expression, 'is', 'invalid', optional($.info)),
-
-    memory_field: $ => seq(
-      choice(
-        seq('data-type', '=>', $.type),
-        seq(
-          choice('depth', 'read-latency', 'write-latency'),
-          '=>', $.number
-        ),
-        seq('read-under-write', '=>', $.ruw),
-        seq(choice('reader', 'writer', 'readwriter'), '=>', sep1(',', $.identifier))
-      ),
-      $._newline
-    ),
-
-    suite: $ => choice(
-      $.statement,
-      seq($._indent, repeat1($.statement), $._dedent)
-    ),
-
-    when: $ => prec.right(seq(
-      'when',
-      $.expression,
-      ':',
-      optional($.info),
-      optional($.suite),
-      optional($.else)
-    )),
-    else: $ => seq(
-      'else',
-      choice(
-        $.when,
-        seq(':', optional($.info), $.suite)
-      )
-    ),
-
-    stop: $ => seq('stop', '(', $.expression, ',', $.expression, ',', $.number, ')', optional($.info)),
-
-    printf: $ => seq(
-      'printf',
-      '(',
-      $.expression, ',',
-      $.expression, ',',
-      $.string,
-      repeat(seq(',', $.expression)),
-      ')',
-      optional($.info)
-    ),
-
-    verif: $ => seq(
-      choice('assert', 'assume', 'cover'),
-      '(',
-      $.expression, ',',
-      $.expression, ',',
-      $.expression, ',',
-      $.string,
-      ')'
-    ),
-
-    skip: $ => seq('skip', optional($.info)),
-
-    attach: $ => seq('attach', '(', sep1(',', $.expression), ')', optional($.info)),
-
-    info: _ => /@\[.*\]/, // $.FileInfo,
-
-    mdir: _ => choice('infer', 'read', 'write', 'rdwr'),
-
-    ruw: _ => choice('old', 'new', 'undefined'),
-
-    litType: $ => seq(
-      choice('UInt', 'SInt'),
-      optional(seq('<', $.number, '>'))
-    ),
-
-    expression: $ => choice(
-      $.literal,
-      $.identifier,
-      $.keyword_identifier,
-      $.sub_field,
-      $.sub_index,
-      $.sub_access,
-      $.mux,
-      $.conditionally_valid,
-      $.primitive_operation
-    ),
-
-    literal: $ => seq($.litType, '(', choice($.number, $.number_str), ')'),
-
-    sub_field: $ => seq($.expression, '.', $.field_id),
-
-    sub_index: $ => seq($.expression, '[', $.number, ']'),
-
-    sub_access: $ => seq($.expression, '[', $.expression, ']'),
-
-    mux: $ => seq('mux', '(', $.expression, ',', $.expression, ',', $.expression, ')'), // no commas in ANTLR
-
-    conditionally_valid: $ => seq('validif', '(', $.expression, ',', $.expression, ')'),
-
-    primitive_operation: $ => seq($.primop, '(', sep1(',', choice($.expression, $.number)), ')'), // no commas in ANTLR
-
-    field_id: $ => choice(
-      $.identifier,
-      $.relaxed_identifier,
-      $.uint
-    ),
-
-    primop: _ => choice(
-      'add',
-      'sub',
-      'mul',
-      'div',
-      'rem',
-      'lt',
-      'leq',
-      'gt',
-      'geq',
-      'eq',
-      'neq',
-      'pad',
-      'asUInt',
-      'asAsyncReset',
-      'asSInt',
-      'asClock',
-      'shl',
-      'shr',
-      'dshl',
-      'dshlw',
-      'dshr',
-      'dshrw',
-      'cvt',
-      'neg',
-      'not',
-      'and',
-      'or',
-      'xor',
-      'andr',
-      'orr',
-      'xorr',
-      'cat',
-      'bits',
-      'head',
-      'tail',
-      'asFixedPoint',
-      'bpshl',
-      'bpshr',
-      'bpset'
-    ),
-
-    uint: _ => choice('0', /[1-9][0-9]*/),
-
-    sint: _ => seq(choice('+', '-'), /[1-9][0-9]*/),
-
-    number: $ => alias(choice($.uint, $.sint), $.number),
-
-    number_str: _ => {
-      const hex = /"h[+-]?[a-fA-F0-9]+"/;
-
-      const octal = /"o[+-]?[0-7]+"/;
-
-      const binary = /"b[+-]?[01]+"/;
-
-      return token(choice(
-        hex,
-        octal,
-        binary
-      ));
-    },
-
-    double: _ => /[+-]*[0-9]+\.[0-9]+(E[+-]?[0-9]+)?/,
-
-    string: $ => seq(
-      '"',
-      repeat(choice(
-        $.string_content,
-        $._escape_sequence
-      )),
-      '"'
-    ),
-
-    raw_string: $ => seq(
-      '\'',
-      repeat(choice(
-        alias($.raw_string_content, $.string_content),
-        $._escape_sequence
-      )),
-      '\''
-    ),
-
-    string_content: _ => token(prec(-1, /[^"\\]+/)),
-    raw_string_content: _ => token(prec(-1, /[^'\\]+/)),
-
-    _escape_sequence: $ =>
-      choice(
-        prec(2, token.immediate(seq('\\', /[^abfnrtvxu'"\\?]/))),
-        prec(1, $.escape_sequence)
-      ),
-    escape_sequence: _ => token.immediate(seq(
-      '\\',
-      choice(
-        /[^xu0-7]/,
-        /[0-7]{1,3}/,
-        /x[0-9a-fA-F]{2}/,
-        /u[0-9a-fA-F]{4}/,
-        /u\{[0-9a-fA-F]+\}/
-      ))),
-
-    identifier: _ => /[a-zA-Z_][a-zA-Z0-9_$]*/, // LegalStartChar (LegalIdChar)*
-    relaxed_identifier: _ => /[a-zA-Z0-9_$]+/, // (LegalIdChar)+
-    keyword_identifier: $ => prec(-3, alias(
-      choice(
-        $.primop,
-        'mux'
-      ),
-      $.identifier
-    )),
-
-    comment: _ => token(seq(';', /.*/))
+  id: _ => /[a-zA-Z_][a-zA-Z0-9_$]*/, // LegalStartChar (LegalIdChar)*
+    circuit: $ => seq($.version, $.newline, "circuit", $.id, ":", optional($.annotations), optional($.info), $.newline, $.indent, repeat($.decl), $.dedent, ),
+    decl: $ => choice($.decl_module, $.decl_extmodule, $.decl_layer, $.decl_type_alias, ),
+    decl_module: $ => seq(optional("public"), "module", $.id, repeat($.enablelayer), ":", optional($.info), $.newline, $.indent, repeat(seq($.port, $.newline, )), repeat(seq($.statement, $.newline, )), $.dedent, ),
+    decl_extmodule: $ => seq("extmodule", $.id, ":", optional($.info), $.newline, $.indent, repeat(seq($.port, $.newline, )), optional(seq("defname", "=", $.id, $.newline, )), repeat(seq("parameter", $.id, "=", $.type_param, $.newline, )), $.dedent, ),
+    decl_layer: $ => seq("layer", $.id, $.string, ":", optional($.info), $.newline, $.indent, repeat(seq($.decl_layer, $.newline, )), $.dedent, ),
+    decl_type_alias: $ => seq("type", $.id, "=", $.type, ),
+    port: $ => seq(choice("input", "output", ), $.id, ":", choice($.type, $.type_property, ), optional($.info), ),
+    type_param: $ => choice($.int, $.string_dq, $.string_sq, ),
+    type_property: $ => "Integer",
+    statement: $ => choice($.circuit_component, $.connectlike, $.conditional, $.command, $.layerblock, $.skip, ),
+    circuit_component: $ => choice($.circuit_component_node, $.circuit_component_wire, $.circuit_component_reg, $.circuit_component_inst, $.circuit_component_mem, ),
+    circuit_component_node: $ => seq("node", $.id, "=", $.expr, optional($.info), ),
+    circuit_component_wire: $ => seq("wire", $.id, ":", $.type, optional($.info), ),
+    circuit_component_inst: $ => seq("inst", $.id, "of", $.id, optional($.info), ),
+    circuit_component_reg: $ => choice(seq("reg", $.id, ":", $.type, ",", $.expr, optional($.info), ), seq("regreset", $.id, ":", $.type, ",", $.expr, ",", $.expr, ",", $.expr, optional($.info), ), ),
+    circuit_component_mem: $ => seq("mem", $.id, ":", optional($.info), $.newline, $.indent, "data-type", "=>", $.type, $.newline, "depth", "=>", $.int, $.newline, "read-latency", "=>", $.int, $.newline, "write-latency", "=>", $.int, $.newline, "read-under-write", "=>", $.read_under_write, $.newline, repeat(seq("reader", "=>", $.id, $.newline, )), repeat(seq("writer", "=>", $.id, $.newline, )), repeat(seq("readwriter", "=>", $.id, $.newline, )), $.dedent, ),
+    read_under_write: $ => choice("old", "new", "undefined", ),
+    connectlike: $ => choice(seq("connect", $.reference, ",", $.expr, optional($.info), ), seq("invalidate", $.reference, optional($.info), ), seq("attach", "(", $.reference, repeat(seq(",", $.reference, )), ")", optional($.info), ), seq("define", $.reference_static, "=", $.expr_probe, optional($.info), ), seq("propassign", $.reference_static, ",", $.property_expr, optional($.info), ), ),
+    conditional: $ => choice($.conditional_when, $.conditional_match, ),
+    conditional_when: $ => seq("when", $.expr, ":", optional($.info), $.newline, $.indent, $.statement, repeat($.statement), $.dedent, optional(seq("else", ":", $.indent, $.statement, repeat($.statement), $.dedent, )), ),
+    conditional_match: $ => seq("match", $.expr, ":", optional($.info), $.newline, optional(seq($.indent, repeat($.conditional_match_branch), $.dedent, )), ),
+    conditional_match_branch: $ => seq($.id, optional(seq("(", $.id, ")", )), ":", $.newline, optional(seq($.indent, repeat($.statement), $.dedent, )), ),
+    command: $ => choice(seq("stop", "(", $.expr, ",", $.expr, ",", $.int, ")", optional($.info), ), seq("force", "(", $.expr, ",", $.expr, ",", $.expr_probe, ",", $.expr, ")", ), seq("force_initial", "(", $.expr_probe, ",", $.expr, ")", ), seq("release", "(", $.expr, ",", $.expr, ",", $.expr_probe, ")", ), seq("release_initial", "(", $.expr_probe, ")", ), seq($.expr_intrinsic, optional($.info), ), seq("printf", "(", $.expr, ",", $.expr, ",", $.string_dq, repeat(seq(",", $.expr, )), ")", optional(seq(":", $.id, )), optional($.info), ), seq("assert", "(", $.expr, ",", $.expr, ",", $.expr, ",", $.string_dq, repeat(seq(",", $.expr, )), ")", optional(seq(":", $.id, )), optional($.info), ), seq("assume", "(", $.expr, ",", $.expr, ",", $.expr, ",", $.string_dq, repeat(seq(",", $.expr, )), ")", optional(seq(":", $.id, )), optional($.info), ), seq("cover", "(", $.expr, ",", $.expr, ",", $.expr, ",", $.string_dq, ")", optional(seq(":", $.id, )), optional($.info), ), ),
+    layerblock: $ => seq("layerblock", $.id, "of", $.id, ":", optional($.info), $.newline, $.indent, repeat(seq($.port, $.newline, )), repeat(seq($.statement, $.newline, )), $.dedent, ),
+    skip: $ => seq("skip", optional($.info), ),
+    reference: $ => choice($.reference_static, $.reference_dynamic, ),
+    reference_static: $ => choice($.id, seq($.reference_static, ".", $.id, ), seq($.reference_static, "[", $.int, "]", ), ),
+    reference_dynamic: $ => choice(seq($.reference_static, "[", $.expr, "]", ), seq($.reference_dynamic, "[", $.expr, "]", ), ),
+    expr: $ => choice($.expr_reference, $.expr_lit, $.expr_enum, $.expr_mux, $.expr_read, $.expr_primop, $.expr_intrinsic, ),
+    expr_reference: $ => $.reference,
+    expr_lit: $ => seq(choice("UInt", "SInt", ), optional($.width), "(", choice($.int, $.rint, ), ")", ),
+    expr_enum: $ => seq($.type_enum, "(", $.id, optional(seq(",", $.expr, )), ")", ),
+    expr_mux: $ => seq("mux", "(", $.expr, ",", $.expr, ",", $.expr, ")", ),
+    expr_read: $ => seq("read", "(", $.expr_probe, ")", ),
+    expr_probe: $ => choice(seq("probe", "(", $.reference_static, ")", ), seq("rwprobe", "(", $.reference_static, ")", ), $.reference_static, ),
+    property_literal_expr: $ => seq("Integer", "(", $.int, ")", ),
+    property_expr: $ => choice($.reference_static, $.property_literal_expr, $.property_expr_primop, ),
+    property_expr_primop: $ => $.property_primop_2expr,
+    expr_primop: $ => choice($.primop_2expr, $.primop_1expr, $.primop_1expr1int, $.primop_1expr2int, ),
+    expr_intrinsic: $ => seq("intrinsic", "(", $.id, optional(seq("<", "parameter", $.id, "=", choice($.int, $.string_dq, ), repeat(seq(",", "parameter", $.id, "=", choice($.int, $.string_dq, ), )), ">", )), optional(seq(":", $.type, )), repeat(seq(",", $.expr, )), ")", ),
+    type: $ => choice($.type_hardware, $.type_probe, ),
+    type_hardware: $ => choice($.type_ground, $.type_bundle, $.type_vec, $.type_enum, $.id, ),
+    type_ground: $ => choice($.type_ground_nowidth, $.type_ground_width, ),
+    type_ground_nowidth: $ => choice("Clock", "Reset", "AsyncReset", ),
+    type_ground_width: $ => choice(seq("UInt", optional($.width), ), seq("SInt", optional($.width), ), seq("Analog", optional($.width), ), ),
+    width: $ => seq("<", $.int, ">", ),
+    type_bundle: $ => seq("{", $.type_bundle_field, repeat($.type_bundle_field), "}", ),
+    type_bundle_field: $ => seq(optional("flip"), $.id, ":", $.type, ),
+    type_vec: $ => seq($.type, "[", $.int, "]", ),
+    type_enum: $ => seq("{|", repeat($.type_enum_alt), "|}", ),
+    type_enum_alt: $ => seq($.id, optional(seq(":", $.type, )), ),
+    type_probe: $ => seq(choice("Probe", "RWProbe", ), "<", $.type, optional(seq(",", $.id, )), ">", ),
+    primop_2expr: $ => seq($.primop_2expr_keyword, "(", $.expr, ",", $.expr, ")", ),
+    primop_1expr: $ => seq($.primop_1expr_keyword, "(", $.expr, ")", ),
+    primop_1expr1int: $ => seq($.primop_1expr1int_keyword, "(", $.expr, ",", $.int, ")", ),
+    primop_1expr2int: $ => seq($.primop_1expr2int_keyword, "(", $.expr, ",", $.int, ",", $.int, ")", ),
+    property_primop_2expr: $ => seq($.property_primop_2expr_keyword, "(", $.property_expr, ",", $.property_expr, ")", ),
+    enablelayer: $ => seq("enablelayer", $.id, repeat(seq(".", $.id, )), ),
+    annotations: $ => seq("%", "[", $.json_array, "]", ),
+    sem_ver: $ => seq($.int, ".", $.int, ".", $.int, ),
+    version: $ => seq("FIRRTL", "version", $.sem_ver, ),
+    int: $ => seq(optional("-"), $.digit_dec, repeat($.digit_dec), ),
+    digit_bin: $ => choice("0", "1", ),
+    digit_oct: $ => choice($.digit_bin, "2", "3", "4", "5", "6", "7", ),
+    digit_dec: $ => choice($.digit_oct, "8", "9", ),
+    digit_hex: $ => choice($.digit_dec, "A", "B", "C", "D", "E", "F", "a", "b", "c", "d", "e", "f", ),
+    rint: $ => choice(seq(optional("-"), "0b", $.digit_bin, repeat($.digit_bin), ), seq(optional("-"), "0o", $.digit_oct, repeat($.digit_oct), ), seq(optional("-"), "0d", $.digit_oct, repeat($.digit_dec), ), seq(optional("-"), "0h", $.digit_hex, repeat($.digit_hex), ), ),
+    literal_id: $ => seq("`", choice("_", $.letter, $.digit_dec, ), repeat(choice("_", $.letter, $.digit_dec, )), "`", ),
+    letter: $ => choice("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", ),
+    info: $ => seq("@", "[", $.lineinfo, repeat(seq(",", $.lineinfo, )), "]", ),
+    lineinfo: $ => seq($.string, " ", $.linecol, ),
+    linecol: $ => seq($.digit_dec, repeat($.digit_dec), ":", $.digit_dec, repeat($.digit_dec), ),
+    primop_1expr_keyword: $ => choice("asUInt", "asSInt", "asClock", "asAsyncReset", "cvt", "neg", "not", "andr", "orr", "xorr", ),
+    primop_2expr_keyword: $ => choice("add", "sub", "mul", "div", "mod", "lt", "leq", "gt", "geq", "eq", "neq", "dshl", "dshr", "and", "or", "xor", "cat", ),
+    primop_1expr1int_keyword: $ => choice("pad", "shl", "shr", "head", "tail", ),
+    primop_1expr2int_keyword: $ => "bits",
+    property_primop_2expr_keyword: $ => choice("integer_add", "integer_mul", "integer_shr", ),
   }
 });

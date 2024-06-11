@@ -1,0 +1,11 @@
+[package]
+name = "antlrgram"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+lalrpop = "0.20.2"
+lalrpop-util = "0.20.2"
+
+[build-dependencies]
+lalrpop = "0.20.2"
