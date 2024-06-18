@@ -178,7 +178,16 @@ expr_probe =
 property_literal_expr = "Integer", "(", int, ")" ;
 property_expr = reference_static | property_literal_expr | property_expr_primop ;
 property_expr_primop = property_primop_2expr ;
-expr_primop = primop_2expr | primop_1expr | primop_1expr1int | primop_1expr2int ;
+
+expr_primop = id , "(" , [ arglist ] , ")" ;
+
+arglist =
+    arg , [","]
+  | arg , "," , arglist ;
+
+arg =
+    expr
+  | int ;
 
 expr_intrinsic = "intrinsic", "(" , id ,
   [ "<" , "parameter" , id , "=" , ( int | string_dq ) ,
@@ -219,14 +228,6 @@ type_enum_alt = id, [ ":" , type ] ;
 
 type_probe = ( "Probe" | "RWProbe" ) , "<", type , [ "," , id ] , ">" ;
 
-primop_2expr     = primop_2expr_keyword , "(" , expr , "," , expr , ")" ;
-primop_1expr     = primop_1expr_keyword , "(" , expr , ")" ;
-primop_1expr1int = primop_1expr1int_keyword , "(", expr , "," , int , ")" ;
-primop_1expr2int = primop_1expr2int_keyword , "(" , expr , "," , int , "," , int , ")" ;
-
-property_primop_2expr = property_primop_2expr_keyword ,
-                          "(" , property_expr , "," , property_expr , ")" ;
-
 enablelayer = "enablelayer" , id , { "." , id } ;
 
 annotations = "%" , "[" , json_array , "]" ;
@@ -262,22 +263,3 @@ letter = "A" | "B" | "C" | "D" | "E" | "F" | "G"
 info = "@" , "[" , lineinfo, { ",", lineinfo }, "]" ;
 lineinfo = string, " ", linecol ;
 linecol = digit_dec , { digit_dec } , ":" , digit_dec , { digit_dec } ;
-
-primop_1expr_keyword =
-    "asUInt" | "asSInt" | "asClock" | "asAsyncReset" | "cvt"
-  | "neg"    | "not"
-  | "andr"   | "orr"    | "xorr" ;
-
-primop_2expr_keyword =
-    "add"  | "sub" | "mul" | "div" | "mod"
-  | "lt"   | "leq" | "gt"  | "geq" | "eq" | "neq"
-  | "dshl" | "dshr"
-  | "and"  | "or"  | "xor" | "cat" ;
-
-primop_1expr1int_keyword =
-    "pad" | "shl" | "shr" | "head" | "tail" ;
-
-primop_1expr2int_keyword = "bits" ;
-
-property_primop_2expr_keyword =
-    "integer_add" | "integer_mul" | "integer_shr" ;
